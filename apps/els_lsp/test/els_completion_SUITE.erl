@@ -152,7 +152,7 @@ default_completions(Config) ->
               | Functions ],
 
   DefaultCompletion = els_completion_provider:keywords()
-                        ++ els_completion_provider:bifs(function, false)
+                        ++ els_completion_provider:bifs(function, with_args)
                         ++ els_snippets_server:snippets(),
   #{ result := Completion1
    } = els_client:completion(Uri, 9, 6, TriggerKind, <<"">>),
@@ -286,7 +286,7 @@ functions_arity(Config) ->
                   }
        }
       || {FunName, Arity} <- ExportedFunctions
-    ] ++ els_completion_provider:bifs(function, true),
+    ] ++ els_completion_provider:bifs(function, only_arity),
   #{result := Completion} =
     els_client:completion(Uri, 51, 17, TriggerKind, <<"">>),
   ?assertEqual(lists:sort(ExpectedCompletion), lists:sort(Completion)),
@@ -497,8 +497,8 @@ types(Config) ->
              ],
 
   DefaultCompletion = els_completion_provider:keywords()
-                        ++ els_completion_provider:bifs(type_definition, false)
-                        ++ els_snippets_server:snippets(),
+    ++ els_completion_provider:bifs(type_definition, with_args)
+    ++ els_snippets_server:snippets(),
 
   ct:comment("Types defined both in the current file and in includes"),
   #{result := Completion1} =

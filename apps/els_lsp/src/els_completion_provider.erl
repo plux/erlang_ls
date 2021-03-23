@@ -92,7 +92,7 @@ find_completions( Prefix
                ) ->
   case lists:reverse(els_text:tokens(Prefix)) of
     [{atom, _, Module}, {'fun', _}| _] ->
-      exported_definitions(Module, 'function', true);
+      exported_definitions(Module, 'function', only_arity);
     [{atom, _, Module}|_] ->
       {ExportFormat, TypeOrFun} = completion_context(Document, Line, Column),
       exported_definitions(Module, TypeOrFun, ExportFormat);
@@ -129,10 +129,10 @@ find_completions( Prefix
   case lists:reverse(els_text:tokens(Prefix)) of
     %% Check for "[...] fun atom:"
     [{':', _}, {atom, _, Module}, {'fun', _} | _] ->
-      exported_definitions(Module, function, _ExportFormat = true);
+      exported_definitions(Module, function, only_arity);
     %% Check for "[...] fun atom:atom"
     [{atom, _, _}, {':', _}, {atom, _, Module}, {'fun', _} | _] ->
-      exported_definitions(Module, function, _ExportFormat = true);
+      exported_definitions(Module, function, only_arity);
     %% Check for "[...] atom:"
     [{':', _}, {atom, _, Module} | _] ->
       {ExportFormat, TypeOrFun} = completion_context(Document, Line, Column),
@@ -164,23 +164,23 @@ find_completions( Prefix
       variables(Document);
     %% Check for "[...] fun atom"
     [{atom, _, _}, {'fun', _} | _] ->
-      bifs(function, ExportFormat = true)
-        ++ definitions(Document, function, ExportFormat = true);
+      bifs(function, only_arity)
+        ++ definitions(Document, function, only_arity);
     %% Check for "[...] atom"
     [{atom, _, Name} | _] ->
       NameBinary = atom_to_binary(Name, utf8),
-      {ExportFormat, POIKind} = completion_context(Document, Line, Column),
-      case ExportFormat of
-        true ->
+      {Format, POIKind} = completion_context(Document, Line, Column),
+      case Format of
+        only_arity ->
           %% Only complete unexported definitions when in export
           unexported_definitions(Document, POIKind);
-        false ->
+        with_args ->
           keywords()
-            ++ bifs(POIKind, ExportFormat)
+            ++ bifs(POIKind, Format)
             ++ atoms(Document, NameBinary)
             ++ all_record_fields(Document, NameBinary)
             ++ modules(NameBinary)
-            ++ definitions(Document, POIKind, ExportFormat)
+            ++ definitions(Document, POIKind, Format)
             ++ els_snippets_server:snippets()
       end;
     _ ->
@@ -230,21 +230,20 @@ item_kind_module(Module) ->
 %%==============================================================================
 -spec unexported_definitions(els_dt_document:item(), poi_kind()) -> [map()].
 unexported_definitions(Document, POIKind) ->
-  AllDefs      = definitions(Document, POIKind, true, false),
-  ExportedDefs = definitions(Document, POIKind, true, true),
-  AllDefs -- ExportedDefs.
+  definitions(Document, POIKind, only_arity, unexported).
 
 -spec definitions(els_dt_document:item(), poi_kind()) -> [map()].
 definitions(Document, POIKind) ->
-  definitions(Document, POIKind, _ExportFormat = false, _ExportedOnly = false).
+  definitions(Document, POIKind, with_args, any).
 
--spec definitions(els_dt_document:item(), poi_kind(), boolean()) -> [map()].
+-spec definitions(els_dt_document:item(), poi_kind(), definition_format()) ->
+        [map()].
 definitions(Document, POIKind, ExportFormat) ->
-  definitions(Document, POIKind, ExportFormat, _ExportedOnly = false).
+  definitions(Document, POIKind, ExportFormat, any).
 
--spec definitions(els_dt_document:item(), poi_kind(), boolean(), boolean()) ->
-  [map()].
-definitions(Document, POIKind, ExportFormat, ExportedOnly) ->
+-spec definitions(els_dt_document:item(), poi_kind(), definition_format(),
+                  export_status()) -> [map()].
+definitions(Document, POIKind, ExportFormat, ExportStatus) ->
   POIs = local_and_included_pois(Document, POIKind),
   #{uri := Uri} = Document,
   %% Find exported entries when there is an export_entry kind available
@@ -254,44 +253,63 @@ definitions(Document, POIKind, ExportFormat, ExportedOnly) ->
             Exports = local_and_included_pois(Document, ExportKind),
             [FA || #{id := FA} <- Exports]
         end,
-  Items = resolve_definitions(Uri, POIs, FAs, ExportedOnly, ExportFormat),
+  Items = resolve_definitions(Uri, POIs, FAs, ExportStatus, ExportFormat),
   lists:usort(Items).
 
 -spec completion_context(els_dt_document:item(), line(), column()) ->
-  {boolean(), poi_kind()}.
+  {definition_format(), poi_kind()}.
 completion_context(Document, Line, Column) ->
-  ExportFormat = is_in(Document, Line, Column, [export, export_type]),
-  POIKind      = case is_in(Document, Line, Column, [spec, export_type]) of
-                   true -> type_definition;
-                   false -> function
-                 end,
-  {ExportFormat, POIKind}.
+  Format = case is_in(Document, Line, Column, [export, export_type]) of
+             true -> only_arity;
+             false -> with_args
+           end,
+  POIKind = case is_in(Document, Line, Column, [spec, export_type]) of
+              true -> type_definition;
+              false -> function
+            end,
+  {Format, POIKind}.
 
--spec resolve_definitions(uri(), [poi()], [{atom(), arity()}],
-                          boolean(), boolean()) ->
+-type definition_format() :: with_args | only_arity.
+-type export_status() :: any | exported | unexported.
+%-type export_format() :: arguments | arity.
+
+-type fa() :: {atom(), arity()}.
+
+-spec resolve_definitions(uri(), [poi()], [fa()],
+                          export_status(), definition_format()) ->
         [map()].
-resolve_definitions(Uri, Functions, ExportsFA, ExportedOnly, ArityOnly) ->
-  [ resolve_definition(Uri, POI, ArityOnly)
+resolve_definitions(Uri, Functions, ExportsFA, ExportStatus, Format) ->
+  [ resolve_definition(Uri, POI, Format)
     || #{id := FA} = POI <- Functions,
-       not ExportedOnly orelse lists:member(FA, ExportsFA)
+       include_in_resolve(ExportStatus, FA, ExportsFA)
   ].
 
--spec resolve_definition(uri(), poi(), boolean()) -> map().
-resolve_definition(Uri, #{kind := 'function', id := {F, A}} = POI, ArityOnly) ->
+-spec include_in_resolve(export_status(), FA, [FA]) -> boolean()
+        when FA :: {atom(), arity()}.
+include_in_resolve(any, _FA, _ExportsFA) ->
+  true;
+include_in_resolve(exported, FA, ExportsFA) ->
+  lists:member(FA, ExportsFA);
+include_in_resolve(unexported, FA, ExportsFA) ->
+  not lists:member(FA, ExportsFA).
+
+-spec resolve_definition(uri(), poi(), definition_format()) -> map().
+resolve_definition(Uri, #{kind := 'function', id := {F, A}} = POI, Format) ->
   Data = #{ <<"module">> => els_uri:module(Uri)
           , <<"function">> => F
           , <<"arity">> => A
           },
-  completion_item(POI, Data, ArityOnly);
-resolve_definition(_Uri, POI, ArityOnly) ->
-  completion_item(POI, ArityOnly).
+  completion_item(POI, Data, Format);
+resolve_definition(_Uri, POI, Format) ->
+  completion_item(POI, Format).
 
--spec exported_definitions(module(), poi_kind(), boolean()) -> [map()].
-exported_definitions(Module, POIKind, ExportFormat) ->
+-spec exported_definitions(module(), poi_kind(), definition_format()) ->
+        [map()].
+exported_definitions(Module, POIKind, Format) ->
   case els_utils:find_module(Module) of
     {ok, Uri} ->
       {ok, Document} = els_utils:lookup_document(Uri),
-      definitions(Document, POIKind, ExportFormat, true);
+      definitions(Document, POIKind, Format, exported);
     {error, _Error} ->
       []
   end.
@@ -363,7 +381,7 @@ keywords() ->
 %% Built-in functions
 %%==============================================================================
 
--spec bifs(poi_kind(), boolean()) -> [map()].
+-spec bifs(poi_kind(), definition_format()) -> [map()].
 bifs(function, ExportFormat) ->
   Range = #{from => {0, 0}, to => {0, 0}},
   Exports = erlang:module_info(exports),
@@ -375,11 +393,11 @@ bifs(function, ExportFormat) ->
            || {F, A} = X <- Exports, erl_internal:bif(F, A)
          ],
   [completion_item(X, ExportFormat) || X <- BIFs];
-bifs(type_definition, true = _ExportFormat) ->
+bifs(type_definition, only_arity) ->
   %% We don't want to include the built-in types when we are in
   %% a -export_types(). context.
   [];
-bifs(type_definition, false = ExportFormat) ->
+bifs(type_definition, with_args) ->
   Types = [ {'any', 0}, {'arity', 0}, {'atom', 0}, {'binary', 0}
           , {'bitstring', 0}, {'boolean', 0}, {'byte', 0}, {'char', 0}
           , {'float', 0}, {'fun', 0}, {'fun', 1}, {'function', 0}
@@ -401,7 +419,7 @@ bifs(type_definition, false = ExportFormat) ->
             }
            || {_, A} = X <- Types
          ],
-  [completion_item(X, ExportFormat) || X <- POIs].
+  [completion_item(X, with_args) || X <- POIs].
 
 -spec generate_arguments(string(), integer()) -> [{integer(), string()}].
 generate_arguments(Prefix, Arity) ->
@@ -426,12 +444,13 @@ filter_by_prefix(Prefix, List, ToBinary, ItemFun) ->
 %%==============================================================================
 %% Helper functions
 %%==============================================================================
--spec completion_item(poi(), boolean()) -> map().
+-spec completion_item(poi(), definition_format()) -> map().
 completion_item(POI, ExportFormat) ->
   completion_item(POI, #{}, ExportFormat).
 
--spec completion_item(poi(), map(), ExportFormat :: boolean()) -> map().
-completion_item(#{kind := Kind, id := {F, A}, data := ArgsNames}, Data, false)
+-spec completion_item(poi(), map(), definition_format()) -> map().
+completion_item(#{kind := Kind, id := {F, A}, data := ArgsNames}, Data,
+                with_args)
   when Kind =:= function;
        Kind =:= type_definition ->
   Label = io_lib:format("~p/~p", [F, A]),
@@ -441,7 +460,7 @@ completion_item(#{kind := Kind, id := {F, A}, data := ArgsNames}, Data, false)
    , insertTextFormat => ?INSERT_TEXT_FORMAT_SNIPPET
    , data             => Data
    };
-completion_item(#{kind := Kind, id := {F, A}}, Data, true)
+completion_item(#{kind := Kind, id := {F, A}}, Data, only_arity)
   when Kind =:= function;
        Kind =:= type_definition ->
   Label = io_lib:format("~p/~p", [F, A]),
