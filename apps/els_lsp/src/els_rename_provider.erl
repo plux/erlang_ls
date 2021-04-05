@@ -38,6 +38,7 @@ handle_request({rename, Params}, State) ->
   {ok, Document} = els_utils:lookup_document(Uri),
   Elem = els_dt_document:get_element_at_pos(Document, Line + 1, Character + 1),
   WorkspaceEdits = workspace_edits(Uri, Elem, NewName),
+  ct:pal("elem: (~p, ~p) ~p", [Line, Character, Elem]),
   {WorkspaceEdits, State}.
 
 %%==============================================================================
@@ -46,6 +47,9 @@ handle_request({rename, Params}, State) ->
 -spec workspace_edits(uri(), [poi()], binary()) -> null | [any()].
 workspace_edits(_Uri, [], _NewName) ->
   null;
+workspace_edits(Uri, [#{kind := record} = POI| _], NewName) ->
+  ct:pal("edits: ~p", [POI]),
+  #{changes => changes(Uri, POI, NewName)};
 workspace_edits(Uri, [#{kind := variable} = POI| _], NewName) ->
   #{changes => changes(Uri, POI, NewName)};
 workspace_edits(Uri, [#{kind := function} = POI| _], NewName) ->
@@ -63,6 +67,7 @@ workspace_edits(Uri, [#{kind := 'callback'} = POI | _], NewName) ->
   #{id := {Name, Arity} = Id} = POI,
   Module = els_uri:module(Uri),
   {ok, Refs} = els_dt_references:find_by_id(behaviour, Module),
+
   Changes =
     lists:foldl(
       fun(#{uri := U}, Acc) ->
@@ -122,6 +127,12 @@ editable_range(#{kind := implicit_fun, id := {F, _A}, range := Range}) ->
   EditToC = EditFromC + length(atom_to_string(F)),
   els_protocol:range(#{ from => {FromL, EditFromC}
                       , to => {FromL, EditToC} });
+editable_range(#{kind := record_expr, range := Range}) ->
+  #{ from := {FromL, FromC}, to := {ToL, ToC}} = Range,
+  EditFromC = FromC + length("#"),
+  EditToC = ToC - length("#"),
+  els_protocol:range(Range#{ from := {FromL, EditFromC}
+                           , to := {ToL, EditToC}});
 editable_range(#{kind := import_entry, id := {_M, F, _A}, range := Range}) ->
   #{ from := {FromL, FromC} } = Range,
   EditToC = FromC + length(atom_to_string(F)),
@@ -142,6 +153,22 @@ editable_range(macro, #{range := Range}) ->
   els_protocol:range(Range#{ from := {FromL, EditFromC} }).
 
 -spec changes(uri(), poi(), binary()) -> #{uri() => [text_edit()]} | null.
+changes(Uri, #{kind := record, id := RecId, range := _RecRange} = POI, NewName) ->
+  Self = change(POI, NewName),
+  {ok, Refs} = els_dt_references:find_by_id(record, RecId),
+  {ok, Doc} = els_utils:lookup_document(Uri),
+  ct:pal("pois: ~p", [els_dt_document:pois(Doc)]),
+  RefPOIs = convert_references_to_pois(Refs, [ record_field
+                                             , record_expr
+                                             ]),
+  %% If record in hrl, then find all files that include the record..
+
+  ct:pal("refpois: ~p", [RefPOIs]),
+  lists:foldl(
+    fun({RefUri, RefPOI}, Acc) ->
+        Changes = [change(RefPOI, NewName)],
+        maps:update_with(RefUri, fun(V) -> Changes ++ V end, Changes, Acc)
+    end, #{Uri => [Self]}, RefPOIs);
 changes(Uri, #{kind := variable, id := VarId, range := VarRange}, NewName) ->
   %% Rename variable in function clause scope
   case els_utils:lookup_document(Uri) of

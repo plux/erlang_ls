@@ -18,6 +18,7 @@
         , rename_variable/1
         , rename_function/1
         , rename_function_quoted_atom/1
+        , rename_record/1
         , rename_parametrized_macro/1
         , rename_macro_from_usage/1
         ]).
@@ -222,6 +223,19 @@ rename_function_quoted_atom(Config) ->
                      , change(NewName, {23, 0}, {23, 13})
                      , change(NewName, {25, 0}, {25, 13})
                      ]}},
+  assert_changes(Expected, Result).
+
+-spec rename_record(config()) -> ok.
+rename_record(Config) ->
+  Uri = ?config(rename_record_uri, Config),
+  Line = 1,
+  Char = 13,
+  NewName = <<"new_record">>,
+  #{result := Result} = els_client:document_rename(Uri, Line, Char, NewName),
+  Expected = #{changes =>
+                 #{binary_to_atom(Uri, utf8) =>
+                     []}},
+  ct:pal("result: ~p", [Result]),
   assert_changes(Expected, Result).
 
 -spec rename_parametrized_macro(config()) -> ok.
