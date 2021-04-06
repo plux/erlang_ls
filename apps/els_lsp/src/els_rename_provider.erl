@@ -130,7 +130,7 @@ editable_range(#{kind := implicit_fun, id := {F, _A}, range := Range}) ->
 editable_range(#{kind := record_expr, range := Range}) ->
   #{ from := {FromL, FromC}, to := {ToL, ToC}} = Range,
   EditFromC = FromC + length("#"),
-  EditToC = ToC - length("#"),
+  EditToC = ToC,
   els_protocol:range(Range#{ from := {FromL, EditFromC}
                            , to := {ToL, EditToC}});
 editable_range(#{kind := import_entry, id := {_M, F, _A}, range := Range}) ->
@@ -153,17 +153,13 @@ editable_range(macro, #{range := Range}) ->
   els_protocol:range(Range#{ from := {FromL, EditFromC} }).
 
 -spec changes(uri(), poi(), binary()) -> #{uri() => [text_edit()]} | null.
-changes(Uri, #{kind := record, id := RecId, range := _RecRange} = POI, NewName) ->
+changes(Uri, #{kind := record, id := RecId} = POI, NewName) ->
   Self = change(POI, NewName),
   {ok, Refs} = els_dt_references:find_by_id(record, RecId),
-  {ok, Doc} = els_utils:lookup_document(Uri),
-  ct:pal("pois: ~p", [els_dt_document:pois(Doc)]),
   RefPOIs = convert_references_to_pois(Refs, [ record_field
                                              , record_expr
                                              ]),
-  %% If record in hrl, then find all files that include the record..
-
-  ct:pal("refpois: ~p", [RefPOIs]),
+  %% We should REALLY check that record comes from the right include file...
   lists:foldl(
     fun({RefUri, RefPOI}, Acc) ->
         Changes = [change(RefPOI, NewName)],

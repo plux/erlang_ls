@@ -211,6 +211,7 @@ do_points_of_interest(Tree, EndLocation) ->
                 Type =:= user_type_application ->
         type_application(Tree);
       record_type   -> record_type(Tree);
+      record_index_expr -> record_index_expr(Tree);
       _             -> []
     end
   catch throw:syntax_error -> []
@@ -392,17 +393,35 @@ record_access(Tree) ->
   case erl_syntax:type(RecordNode) of
     atom ->
       Record = erl_syntax:atom_value(RecordNode),
-      FieldPoi =
-        case erl_syntax:type(FieldNode) of
-          atom ->
-            Field = erl_syntax:atom_value(FieldNode),
-            [poi(erl_syntax:get_pos(FieldNode), record_field, {Record, Field})];
-          _    ->
-            []
-        end,
+      FieldPois = record_field_pois(Record, FieldNode),
       [ poi(erl_syntax:get_pos(Tree), record_expr, Record)
-      | FieldPoi ];
+      | FieldPois ];
     _ ->
+      []
+  end.
+
+-spec record_index_expr(tree()) -> [poi()].
+record_index_expr(Tree) ->
+  RecordNode = erl_syntax:record_index_expr_type(Tree),
+  case erl_syntax:type(RecordNode) of
+    atom ->
+      Record = erl_syntax:atom_value(RecordNode),
+      %% Add record fields POIs just like record_expr
+      FieldNode = erl_syntax:record_index_expr_field(Tree),
+      FieldPois = record_field_pois(Record, FieldNode),
+      [ poi(erl_syntax:get_pos(Tree), record_expr, Record)
+      | FieldPois ];
+    _ ->
+      []
+  end.
+
+-spec record_field_pois(atom(), tree()) -> [poi()].
+record_field_pois(Record, FieldNode) ->
+  case erl_syntax:type(FieldNode) of
+    atom ->
+      Field = erl_syntax:atom_value(FieldNode),
+      [poi(erl_syntax:get_pos(FieldNode), record_field, {Record, Field})];
+    _    ->
       []
   end.
 

@@ -1,11 +1,7 @@
 -module(rename_record).
--record(record_a, {field_a :: integer(), field_b}).
--type record_a() :: #record_a{}.
+-record(record_foo, {field_a :: integer(), field_b}).
 
--spec function_a() -> record_a().
-function_a() ->
-  Rec = #record_a{field_a = 1},
-  { Rec#record_a{field_a = 2}
-  , Rec#record_a.field_a
-  , #record_a.field_b
-  }.
+function_a(X) ->
+  X = #record_foo{field_a = 42},
+  Y = X#record_foo.field_a,
+  #record_foo.field_b.
