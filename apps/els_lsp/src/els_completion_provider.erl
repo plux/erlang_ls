@@ -10,6 +10,9 @@
         , trigger_characters/0
         ]).
 
+%% TODO: move somewhere generic.
+-export([ find_record_definition/2 ]).
+
 %% Exported to ease testing.
 -export([ bifs/2
         , keywords/0

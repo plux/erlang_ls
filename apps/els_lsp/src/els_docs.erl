@@ -62,12 +62,63 @@ docs(Uri, #{kind := macro, id := Name} = POI) ->
     _ ->
       []
   end;
+docs(Uri, #{kind := record_expr, id := Name}) ->
+  {ok, Document} = els_utils:lookup_document(Uri),
+  record_docs(Document, Name);
 docs(_Uri, _POI) ->
   [].
+
+-record(foo, {a :: integer(), b = 23 :: integer(), c = xxx :: atom()}).
 
 %%==============================================================================
 %% Internal Functions
 %%==============================================================================
+-spec record_docs(any(), atom()) -> [els_markup_content:doc_entry()].
+record_docs(Document, Name) ->
+  _X = #foo{},
+  [ {code_block_begin, "erlang"}
+  , {code_block_line, "#" ++ atom_to_string(Name) ++ "{"}
+  ] ++ record_fields(Document, Name) ++
+  [ {code_block_line, "}"}
+  , {code_block_end, "erlang"}
+  ].
+
+-spec record_fields(els_dt_document:item(), atom()) -> [map()].
+record_fields(Document, RecordName) ->
+  case els_completion_provider:find_record_definition(Document, RecordName) of
+    [] -> [];
+    POIs ->
+      [#{data := Fields}=POI | _] = els_poi:sort(POIs),
+      ?LOG_INFO("poi: ~p", [POI]),
+      ?LOG_INFO("fields: ~p", [Fields]),
+      fmt_record_fields(Fields)
+  end.
+
+-spec fmt_record_fields(any()) -> [{code_block_line, list()}].
+fmt_record_fields([]) -> [];
+fmt_record_fields([{Name, {Val, Type}}]) ->
+  [{code_block_line, [ atom_to_string(Name)
+                     , fmt(" = ", Val)
+                     , fmt(" :: ", Type)
+                     ]}];
+fmt_record_fields([{Name, {Val, Type}}|Rest]) ->
+  [ {code_block_line, [ atom_to_string(Name)
+                      , fmt(" = ", Val)
+                      , fmt(" :: ", Type)
+                      , ","
+                      ]}
+  | fmt_record_fields(Rest)].
+
+-spec fmt(any(), any()) -> any().
+fmt(_Prefix, none)    -> "";
+fmt(Prefix, TypeTree) ->
+  [Prefix, erl_prettypr:format(TypeTree, [{paper, 40}])].
+
+-spec atom_to_string(atom()) -> list().
+atom_to_string(Atom) ->
+  %% io_lib:write?
+  io_lib:format("~ts", [Atom]).
+
 -spec function_docs(application_type(), atom(), atom(), non_neg_integer()) ->
         [els_markup_content:doc_entry()].
 function_docs(Type, M, F, A) ->
