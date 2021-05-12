@@ -23,7 +23,7 @@
 -endif.
 
 %%==============================================================================
-%% Macro Definnitions
+%% Macro Definitions
 %%==============================================================================
 -define(MAX_CLAUSES, 10).
 
@@ -68,56 +68,50 @@ docs(Uri, #{kind := record_expr, id := Name}) ->
 docs(_Uri, _POI) ->
   [].
 
--record(foo, {a :: integer(), b = 23 :: integer(), c = xxx :: atom()}).
-
 %%==============================================================================
 %% Internal Functions
 %%==============================================================================
--spec record_docs(any(), atom()) -> [els_markup_content:doc_entry()].
+-spec record_docs(els_dt_document:item(), atom()) ->
+        [els_markup_content:doc_entry()].
 record_docs(Document, Name) ->
-  _X = #foo{},
-  [ {code_block_begin, "erlang"}
-  , {code_block_line, "#" ++ atom_to_string(Name) ++ "{"}
-  ] ++ record_fields(Document, Name) ++
-  [ {code_block_line, "}"}
-  , {code_block_end, "erlang"}
-  ].
-
--spec record_fields(els_dt_document:item(), atom()) -> [map()].
-record_fields(Document, RecordName) ->
-  case els_completion_provider:find_record_definition(Document, RecordName) of
+  case els_completion_provider:find_record_definition(Document, Name) of
     [] -> [];
     POIs ->
-      [#{data := Fields}=POI | _] = els_poi:sort(POIs),
-      ?LOG_INFO("poi: ~p", [POI]),
-      ?LOG_INFO("fields: ~p", [Fields]),
-      fmt_record_fields(Fields)
+      [#{data := Fields} | _] = els_poi:sort(POIs),
+      Lines = format_record(Name, Fields),
+      erlang_code_block(Lines)
   end.
 
--spec fmt_record_fields(any()) -> [{code_block_line, list()}].
-fmt_record_fields([]) -> [];
-fmt_record_fields([{Name, {Val, Type}}]) ->
+-spec format_record(atom(), list()) -> [els_markup_content:doc_entry()].
+format_record(Name, Fields) ->
+  lists:append([ [{code_block_line, "#" ++ atom_to_string(Name) ++ "{"}]
+               , format_record_fields(Fields)
+               , [{code_block_line, "}"}]
+               ]).
+
+-spec format_record_fields(list()) -> [{code_block_line, list()}].
+format_record_fields([]) -> [];
+format_record_fields([{Name, {Val, Type}}]) ->
   [{code_block_line, [ atom_to_string(Name)
-                     , fmt(" = ", Val)
-                     , fmt(" :: ", Type)
+                     , format(" = ", Val)
+                     , format(" :: ", Type)
                      ]}];
-fmt_record_fields([{Name, {Val, Type}}|Rest]) ->
+format_record_fields([{Name, {Val, Type}}|Rest]) ->
   [ {code_block_line, [ atom_to_string(Name)
-                      , fmt(" = ", Val)
-                      , fmt(" :: ", Type)
+                      , format(" = ", Val)
+                      , format(" :: ", Type)
                       , ","
                       ]}
-  | fmt_record_fields(Rest)].
+  | format_record_fields(Rest) ].
 
--spec fmt(any(), any()) -> any().
-fmt(_Prefix, none)    -> "";
-fmt(Prefix, TypeTree) ->
+-spec format(string(), erl_syntax:syntaxTree() | none) -> iolist().
+format(_Prefix, none)    -> "";
+format(Prefix, TypeTree) ->
   [Prefix, erl_prettypr:format(TypeTree, [{paper, 40}])].
 
 -spec atom_to_string(atom()) -> list().
 atom_to_string(Atom) ->
-  %% io_lib:write?
-  io_lib:format("~ts", [Atom]).
+  io_lib:write(Atom).
 
 -spec function_docs(application_type(), atom(), atom(), non_neg_integer()) ->
         [els_markup_content:doc_entry()].
@@ -227,13 +221,18 @@ function_clauses(Module, Function, Arity) ->
       Lines = [{code_block_line, atom_to_list(F) ++ els_utils:to_list(Data)}
                 || #{id := {F, A, _}, data := Data} <- ClausesPOIs,
                    F =:= Function, A =:= Arity],
-      lists:append([ [{code_block_begin, "erlang"}]
-                   , truncate_lines(Lines)
-                   , [{code_block_end, "erlang"}]
-                   ]);
+      erlang_code_block(Lines);
     {error, _Reason} ->
       []
   end.
+
+-spec erlang_code_block([els_markup_content:doc_entry()]) ->
+        [els_markup_content:doc_entry()].
+erlang_code_block(Lines) ->
+  lists:append([ [{code_block_begin, "erlang"}]
+               , truncate_lines(Lines)
+               , [{code_block_end, "erlang"}]
+               ]).
 
 -spec truncate_lines([els_markup_content:doc_entry()]) ->
         [els_markup_content:doc_entry()].
