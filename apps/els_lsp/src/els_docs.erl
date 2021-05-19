@@ -31,6 +31,8 @@
 %% Types
 %%==============================================================================
 -type application_type() :: 'local' | 'remote'.
+-type maybe_tree() :: erl_syntax:syntaxTree() | none.
+-type record_field() :: {atom(), {maybe_tree(), maybe_tree()} | none}.
 
 %%==============================================================================
 %% Dialyer Ignores (due to upstream bug, see ERL-1262
@@ -89,25 +91,29 @@ format_record(Name, Fields) ->
                , [{code_block_line, "}"}]
                ]).
 
--spec format_record_fields(list()) -> [{code_block_line, list()}].
+-spec format_record_fields([record_field()]) -> [{code_block_line, [string()]}].
 format_record_fields([]) -> [];
-format_record_fields([{Name, {Val, Type}}]) ->
-  [{code_block_line, [ atom_to_string(Name)
-                     , format(" = ", Val)
-                     , format(" :: ", Type)
-                     ]}];
-format_record_fields([{Name, {Val, Type}}|Rest]) ->
-  [ {code_block_line, [ atom_to_string(Name)
-                      , format(" = ", Val)
-                      , format(" :: ", Type)
-                      , ","
-                      ]}
+format_record_fields([Field]) ->
+  [ {code_block_line, format_record_field(Field)} ];
+format_record_fields([Field | Rest]) ->
+  [ {code_block_line, format_record_field(Field) ++ [","]}
   | format_record_fields(Rest) ].
 
--spec format(string(), erl_syntax:syntaxTree() | none) -> iolist().
+-spec format_record_field(record_field()) -> [string()].
+format_record_field({Name, {Val, Type}}) ->
+   [ atom_to_string(Name)
+   , format(" = ", Val)
+   , format(" :: ", Type)
+   ];
+format_record_field({Name, Extra}) ->
+  [ atom_to_string(Name)
+  , format(" = ", Extra)
+  ].
+
+-spec format(string(), maybe_tree()) -> string().
 format(_Prefix, none)    -> "";
 format(Prefix, TypeTree) ->
-  [Prefix, erl_prettypr:format(TypeTree, [{paper, 40}])].
+  Prefix ++ erl_prettypr:format(TypeTree, [{paper, 40}]).
 
 -spec atom_to_string(atom()) -> list().
 atom_to_string(Atom) ->
