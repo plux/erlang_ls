@@ -25,6 +25,7 @@ is_enabled() -> true.
 -spec options() -> map().
 options() ->
   #{ commands => [ els_command:with_prefix(<<"replace-lines">>)
+                 , els_command:with_prefix(<<"replace-range">>)
                  , els_command:with_prefix(<<"server-info">>)
                  , els_command:with_prefix(<<"ct-run-test">>)
                  , els_command:with_prefix(<<"show-behaviour-usages">>)
@@ -55,6 +56,15 @@ execute_command(<<"replace-lines">>
                   els_text_edit:edit_replace_text(Uri, Lines, LineFrom, LineTo)
             },
   els_server:send_request(Method, Params),
+  [];
+execute_command(<<"replace-range">>
+               , [#{ <<"uri">>   := Uri
+                   , <<"text">>  := Text
+                   , <<"range">> := Range
+                   }]) ->
+  Method = <<"workspace/applyEdit">>,
+  Changes = #{Uri => [#{range => Range, newText => Text}]},
+  els_server:send_request(Method, #{edit => #{changes => Changes}}),
   [];
 execute_command(<<"server-info">>, _Arguments) ->
   {ok, Version} = application:get_key(?APP, vsn),
