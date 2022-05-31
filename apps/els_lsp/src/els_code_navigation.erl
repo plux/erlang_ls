@@ -37,6 +37,48 @@ goto_definition(
         % Probably due to parse error
         [] -> {error, nothing_in_scope}
     end;
+goto_definition(Uri, #{kind := Kind, id := {M, F, A},
+                       data := #{args := Args,
+                                 name_range := _Range}}) when
+      Kind =:= application,
+      M =:= gen_server,
+      (F =:= call orelse F =:= cast)
+->
+    %% Hack for gen_server call/cast, instead of jumping into gen_server module
+    %% we try to go to the correct clause in the handle_call/cast functions in
+    %% in the current module.
+    %% This works on the assumption that that the behaviour implementation is in
+    %% the same module as the call to gen_server.
+    %% If no handle_* callback is found we revert back to jumping to gen_server
+    %% function defintions.
+    %% TODO: Implement corresponding functionality for references
+    %% TODO: Check if current module is implementing the gen_server behaviour
+    [_Module, Msg | _] = Args, %% Args type is [erl_syntax:syntaxTree()]
+    ArgsStr = list_to_binary("(" ++ erl_prettypr:format(Msg)),
+    {ok, Doc} = els_utils:lookup_document(Uri),
+    POIs = els_dt_document:pois(Doc, [function_clause]),
+    CallbackDefinition = callback_definition(M, F, A),
+    case
+           [{binary:longest_common_prefix([ArgsStr, POIArgsStr]), POI}
+            || #{id := {PoiF, PoiA, _}, data := POIArgsStr} = POI <- POIs,
+               {PoiF, PoiA} =:= CallbackDefinition]
+    of
+        [] ->
+            %% No handle_* function clauses found, go to gen_server
+            case els_utils:find_module(gen_server) of
+                {ok, DestUri} -> find(DestUri, function, {F, A});
+                {error, Error} -> {error, Error}
+            end;
+        CommonPrefixPOIs ->
+            case lists:max(CommonPrefixPOIs) of
+                {CommonPrefixSize, FunClausePOI} when CommonPrefixSize > 3 ->
+                    %% Go to closest matching handle_* function clause
+                    {ok, Uri, FunClausePOI};
+                _ ->
+                    %% No decent match found, just go to handle_* function
+                    find(Uri, function, CallbackDefinition)
+            end
+     end;
 goto_definition(
     _Uri,
     #{kind := Kind, id := {M, F, A}}
@@ -125,6 +167,10 @@ goto_definition(_Uri, #{kind := parse_transform, id := Module}) ->
     end;
 goto_definition(_Filename, _) ->
     {error, not_found}.
+
+-spec callback_definition(atom(), atom(), integer()) -> {atom(), integer()}.
+callback_definition(gen_server, call, _) -> {handle_call, 3};
+callback_definition(gen_server, cast, _) -> {handle_cast, 2}.
 
 -spec is_imported_bif(uri(), atom(), non_neg_integer()) -> boolean().
 is_imported_bif(_Uri, F, A) ->

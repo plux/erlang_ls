@@ -247,9 +247,11 @@ application(Tree) ->
             Pos = erl_syntax:get_pos(ModFunTree),
             FunTree = erl_syntax:module_qualifier_body(ModFunTree),
             ModTree = erl_syntax:module_qualifier_argument(ModFunTree),
+            Args = erl_syntax:application_arguments(Tree),
             Data = #{
                 name_range => els_range:range(erl_syntax:get_pos(FunTree)),
-                mod_range => els_range:range(erl_syntax:get_pos(ModTree))
+                mod_range => els_range:range(erl_syntax:get_pos(ModTree)),
+                args => Args
             },
             [poi(Pos, application, MFA, Data)]
     end.
