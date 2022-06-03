@@ -14,6 +14,7 @@
 -export([
     application_local/1,
     application_remote/1,
+    callback/1,
     function_definition/1,
     function_multiple_clauses/1,
     fun_local/1,
@@ -140,6 +141,25 @@ application_remote(Config) ->
         #{
             uri => Uri,
             range => #{from => {52, 8}, to => {52, 38}}
+        }
+    ],
+    assert_locations(Locations, ExpectedLocations),
+    ok.
+
+-spec callback(config()) -> ok.
+callback(Config) ->
+    Uri = ?config(behaviour_a_uri, Config),
+    Uri2 = ?config(code_navigation_uri, Config),
+    Uri3 = ?config(callback_module_uri, Config),
+    #{result := Locations} = els_client:references(Uri, 3, 16),
+    ExpectedLocations = [
+        #{
+            uri => Uri3,
+            range => #{from => {6, 1}, to => {6, 11}}
+        },
+        #{
+            uri => Uri2,
+            range => #{from => {28, 1}, to => {28, 11}}
         }
     ],
     assert_locations(Locations, ExpectedLocations),
