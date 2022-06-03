@@ -124,6 +124,29 @@ find_references(_Uri, #{kind := Kind, id := Name}) when
     Kind =:= behaviour
 ->
     find_references_for_id(Kind, Name);
+find_references(Uri, #{kind := Kind, id := Id, range := Range}) when
+    Kind =:= atom
+->
+    Module = els_uri:module(Uri),
+    {ok, #{text := Text}} = els_utils:lookup_document(Uri),
+    #{from := {LineNum, ColumnNum}} = Range,
+    Prefix = els_text:line(Text, LineNum-1, ColumnNum-1),
+    case els_text:last_token(Prefix) of
+        {':', _} ->
+            uri_pois_to_locations(
+              [
+               {RefUri, POI}
+               || #{uri := RefUri} <- find_references_for_id(behaviour, Module),
+                  #{id := {F, _}} = POI <- els_scope:find_pois_by_uri(
+                                            RefUri,
+                                            [function]
+                                           ),
+                  F =:= Id
+              ]
+             );
+        _ ->
+            []
+    end;
 find_references(_Uri, _POI) ->
     [].
 
