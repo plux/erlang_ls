@@ -4,7 +4,8 @@
 -export([
     local_and_included_pois/2,
     local_and_includer_pois/2,
-    variable_scope_range/2
+    variable_scope_range/2,
+    find_pois_by_uri/2
 ]).
 
 -include("els_lsp.hrl").

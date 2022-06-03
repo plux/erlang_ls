@@ -124,6 +124,21 @@ find_references(_Uri, #{kind := Kind, id := Name}) when
     Kind =:= behaviour
 ->
     find_references_for_id(Kind, Name);
+find_references(Uri, #{kind := Kind, id := Id}) when
+    Kind =:= callback
+->
+    Module = els_uri:module(Uri),
+    uri_pois_to_locations(
+        [
+            {RefUri, POI}
+         || #{uri := RefUri} <- find_references_for_id(behaviour, Module),
+            #{id := RefId} = POI <- els_scope:find_pois_by_uri(
+                RefUri,
+                [function]
+            ),
+            RefId =:= Id
+        ]
+    );
 find_references(_Uri, _POI) ->
     [].
 
