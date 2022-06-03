@@ -18,6 +18,7 @@
 %% Includes
 %%==============================================================================
 -include("els_lsp.hrl").
+-include_lib("kernel/include/logger.hrl").
 
 %%==============================================================================
 %% Types
@@ -124,21 +125,12 @@ find_references(_Uri, #{kind := Kind, id := Name}) when
     Kind =:= behaviour
 ->
     find_references_for_id(Kind, Name);
-find_references(Uri, #{kind := Kind, id := Id}) when
-    Kind =:= callback
+find_references(Uri, #{kind := callback} = POI)
+
 ->
-    Module = els_uri:module(Uri),
+    {ok, Doc} = els_utils:lookup_document(Uri),
     uri_pois_to_locations(
-        [
-            {RefUri, POI}
-         || #{uri := RefUri} <- find_references_for_id(behaviour, Module),
-            #{id := RefId} = POI <- els_scope:find_pois_by_uri(
-                RefUri,
-                [function]
-            ),
-            RefId =:= Id
-        ]
-    );
+      els_implementation_provider:implementation(Doc, POI));
 find_references(_Uri, _POI) ->
     [].
 

@@ -6,7 +6,8 @@
 
 -export([
     is_enabled/0,
-    handle_request/2
+    handle_request/2,
+    implementation/2
 ]).
 
 %%==============================================================================

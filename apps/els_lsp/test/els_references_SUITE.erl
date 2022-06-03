@@ -148,21 +148,27 @@ application_remote(Config) ->
 
 -spec callback(config()) -> ok.
 callback(Config) ->
-    Uri = ?config(behaviour_a_uri, Config),
-    Uri2 = ?config(code_navigation_uri, Config),
-    Uri3 = ?config(callback_module_uri, Config),
-    #{result := Locations} = els_client:references(Uri, 3, 16),
-    ExpectedLocations = [
+    Uri = ?config(implementation_uri, Config),
+    #{result := Result} = els_client:references(Uri, 3, 20),
+    Expected = [
         #{
-            uri => Uri3,
-            range => #{from => {6, 1}, to => {6, 11}}
+            range =>
+                #{
+                    'end' => #{character => 17, line => 6},
+                    start => #{character => 0, line => 6}
+                },
+            uri => ?config(implementation_a_uri, Config)
         },
         #{
-            uri => Uri2,
-            range => #{from => {28, 1}, to => {28, 11}}
+            range =>
+                #{
+                    'end' => #{character => 17, line => 6},
+                    start => #{character => 0, line => 6}
+                },
+            uri => ?config(implementation_b_uri, Config)
         }
     ],
-    assert_locations(Locations, ExpectedLocations),
+    ?assertEqual(Expected, Result),
     ok.
 
 -spec function_definition(config()) -> ok.
