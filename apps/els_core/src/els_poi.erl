@@ -101,12 +101,7 @@ new(Range, Kind, Id, Data) ->
 match_pos(POIs, Pos) ->
     [
         POI
-     || #{
-            range := #{
-                from := From,
-                to := To
-            }
-        } = POI <- POIs,
+     || #{range := #{from := From, to := To}} = POI <- POIs,
         (From =< Pos) andalso (Pos =< To)
     ].
 
