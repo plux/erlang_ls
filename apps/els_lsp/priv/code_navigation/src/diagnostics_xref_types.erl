@@ -6,6 +6,6 @@
 
 -type type_a() :: code_navigation:non_existing().
 
--spec function_a(code_navigation:type_a()) -> code_navigation:non_existing().
+-spec function_a(orddict:orddict()) -> code_navigation:non_existing().
 function_a(_) ->
     ok.
