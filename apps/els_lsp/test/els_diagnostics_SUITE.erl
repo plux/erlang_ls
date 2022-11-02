@@ -38,6 +38,7 @@
     escript_warnings/1,
     escript_errors/1,
     crossref/1,
+    crossref_types/1,
     crossref_autoimport/1,
     crossref_autoimport_disabled/1,
     crossref_pseudo_functions/1,
@@ -810,6 +811,29 @@ crossref(_Config) ->
             #{
                 message => <<"Cannot find definition for function lists:map/3">>,
                 range => {{5, 2}, {5, 11}}
+            }
+        ],
+    Warnings = [],
+    Hints = [],
+    els_test:run_diagnostics_test(Path, Source, Errors, Warnings, Hints).
+
+-spec crossref_types(config()) -> ok.
+crossref_types(_Config) ->
+    Path = src_path("diagnostics_xref_types.erl"),
+    Source = <<"CrossRef">>,
+    Errors =
+        [
+            #{
+                message => <<"Cannot find definition for type non_existing/0">>,
+                range => {{3, 14}, {3, 28}}
+            },
+            #{
+                message => <<"Cannot find definition for type maps:bad/0">>,
+                range => {{6, 18}, {6, 26}}
+            },
+            #{
+                message => <<"Cannot find definition for type maps:bad/0">>,
+                range => {{8, 37}, {8, 45}}
             }
         ],
     Warnings = [],

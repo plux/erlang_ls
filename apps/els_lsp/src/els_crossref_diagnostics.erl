@@ -39,10 +39,14 @@ run(Uri) ->
             [];
         {ok, Document} ->
             POIs = els_dt_document:pois(Document, [
+                %% Functions
                 application,
                 implicit_fun,
                 import_entry,
-                export_entry
+                export_entry,
+                %% Types
+                type_application,
+                export_type_entry
             ]),
             [make_diagnostic(POI) || POI <- POIs, not has_definition(POI, Document)]
     end.
@@ -55,7 +59,7 @@ source() ->
 %% Internal Functions
 %%==============================================================================
 -spec make_diagnostic(els_poi:poi()) -> els_diagnostics:diagnostic().
-make_diagnostic(#{range := Range, id := Id}) ->
+make_diagnostic(#{range := Range, id := Id, kind := Kind}) ->
     Function =
         case Id of
             {F, A} -> lists:flatten(io_lib:format("~p/~p", [F, A]));
@@ -63,8 +67,8 @@ make_diagnostic(#{range := Range, id := Id}) ->
         end,
     Message = els_utils:to_binary(
         io_lib:format(
-            "Cannot find definition for function ~s",
-            [Function]
+            "Cannot find definition for ~p ~s",
+            [els_dt_references:kind_to_category(Kind), Function]
         )
     ),
     Severity = ?DIAGNOSTIC_ERROR,
