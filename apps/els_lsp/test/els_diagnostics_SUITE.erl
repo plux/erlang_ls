@@ -828,12 +828,12 @@ crossref_types(_Config) ->
                 range => {{3, 14}, {3, 28}}
             },
             #{
-                message => <<"Cannot find definition for type maps:bad/0">>,
-                range => {{6, 18}, {6, 26}}
+                message => <<"Cannot find definition for type code_navigation:non_existing/0">>,
+                range => {{6, 18}, {6, 46}}
             },
             #{
-                message => <<"Cannot find definition for type maps:bad/0">>,
-                range => {{8, 37}, {8, 45}}
+                message => <<"Cannot find definition for type code_navigation:non_existing/0">>,
+                range => {{8, 46}, {8, 74}}
             }
         ],
     Warnings = [],

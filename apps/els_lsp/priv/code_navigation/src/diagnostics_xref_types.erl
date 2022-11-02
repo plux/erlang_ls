@@ -4,8 +4,8 @@
               non_existing/0
              ]).
 
--type type_a() :: maps:bad().
+-type type_a() :: code_navigation:non_existing().
 
--spec function_a(maps:iterator()) -> maps:bad().
+-spec function_a(code_navigation:type_a()) -> code_navigation:non_existing().
 function_a(_) ->
     ok.
